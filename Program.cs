@@ -1,69 +1,79 @@
-﻿using System;
+﻿using MUD_server;
+using System;
+using System.Text;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
+using System.Security.Cryptography;
+using System.Diagnostics.Metrics;
 
-// Socket Listener acts as a server and listens to the incoming
-// messages on the specified port and protocol.
-public class SocketListener
+public class MUD_Server
 {
     public static int Main(String[] args)
     {
-        StartServer();
+        int MaxCon = 10;
+        StartServer(MaxCon);
         return 0;
     }
 
-    public static void StartServer()
+    public static void StartServer(int MaxCon)
     {
-        // Get Host IP Address that is used to establish a connection
-        // In this case, we get one IP address of localhost that is IP : 127.0.0.1
-        // If a host has multiple addresses, you will get a list of addresses
-        IPHostEntry host = Dns.GetHostEntry("localhost");
-        IPAddress ipAddress = host.AddressList[0];
-        IPEndPoint localEndPoint = new IPEndPoint(ipAddress, 11000);
-
-        try
+        Random rnd = new Random(); //random number generator for the stats
+        int[] CharacterStats = { 0, 0, 0 }; //Dungeons delved, Monsters killed, Encounters completed
+        CharacterStats[0] = (rnd.Next(1, 3));
+        CharacterStats[1] = (rnd.Next(1, 3));
+        CharacterStats[2] = (rnd.Next(1, 3));
+        Console.WriteLine("Max number of clients is "+MaxCon);
+        Console.WriteLine("Waiting for a connection...");
+        Socket Handler = Connecter.StartConnection(MaxCon);
+        int counter =0;
+        while (true)
         {
-
-            // Create a Socket that will use Tcp protocol
-            Socket listener = new Socket(ipAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-            // A Socket must be associated with an endpoint using the Bind method
-            listener.Bind(localEndPoint);
-            // Specify how many requests a Socket can listen before it gives Server busy response.
-            // We will listen 10 requests at a time
-            listener.Listen(10);
-
-            Console.WriteLine("Waiting for a connection...");
-            Socket handler = listener.Accept();
-
-            // Incoming data from the client.
-            string data = null;
-            byte[] bytes = null;
-
-            while (true)
+            try
             {
-                bytes = new byte[1024];
-                int bytesRec = handler.Receive(bytes);
-                data += Encoding.ASCII.GetString(bytes, 0, bytesRec);
-                if (data.IndexOf("<EOF>") > -1)
+                counter ++;
+                if (counter == MaxCon)
                 {
+                    CharacterStats[0]++;
+                    CharacterStats[1]++;
+                    CharacterStats[2]++;
+                }
+                String responce = Connecter.recieveData(Handler);
+                Console.WriteLine(responce);
+                if (responce == "Shutdown")
+                {
+                    Connecter.Shutdown(Handler);
+                    Console.WriteLine( "shutting down connection");
                     break;
                 }
+                else if (responce == "Request")
+                {
+                    Console.WriteLine("sending Request");
+                    String data = "0"+CharacterStats[0].ToString()+"."+ "0" + CharacterStats[1].ToString()+ "."+"0" +  CharacterStats[2].ToString();
+                    Console.WriteLine(data);
+                    Connecter.SendData(Handler,data);
+                }
+                
             }
-
-            Console.WriteLine("Text received : {0}", data);
-
-            byte[] msg = Encoding.ASCII.GetBytes(data);
-            handler.Send(msg);
-            handler.Shutdown(SocketShutdown.Both);
-            handler.Close();
+            catch (Exception e)
+            {
+                Console.WriteLine("recieving " + e.Message);
+                Connecter.Shutdown(Handler);
+                Console.WriteLine("shutting down connection");
+                break;
+            }
+            //try
+            //{
+            //    String Message = (CharacterStats[0].ToString() + CharacterStats[1].ToString() + CharacterStats[2].ToString());
+            //    Connecter.SendData(Handler, Message);
+            //}
+            //catch (Exception e)
+            //{
+            //    Console.WriteLine("sending "+e.Message);
+            //    Connecter.Shutdown(Handler);
+            //    Console.WriteLine("shutting down connection");
+            //    break;
+            //}
+            Console.ReadKey();
         }
-        catch (Exception e)
-        {
-            Console.WriteLine(e.ToString());
-        }
-
-        Console.WriteLine("\n Press any key to continue...");
-        Console.ReadKey();
     }
 }
